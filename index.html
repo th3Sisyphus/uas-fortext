@@ -59,6 +59,17 @@
   details { border-top: 1px solid var(--line); padding: 10px 0; }
   summary { cursor: pointer; font-weight: 600; }
   details h3 { font-size: 1rem; margin: 16px 0 6px; }
+  .diagram { display: flex; flex-wrap: wrap; align-items: center; gap: 24px;
+             margin: 4px 0 16px; }
+  .diagram svg { width: 180px; height: 180px; flex: none; }
+  .diagram-angka { fill: var(--ink); font-size: 30px; font-weight: 700;
+                   text-anchor: middle; }
+  .diagram-label { fill: var(--muted); font-size: 12px; text-anchor: middle; }
+  .legenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px;
+             font-size: .9rem; }
+  .legenda li { display: flex; align-items: center; gap: 8px; }
+  .kotak { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .legenda-angka { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -89,6 +100,7 @@
   <div id="hasil">
     <section class="panel">
       <h2>Ringkasan perbandingan</h2>
+      <div id="dRingkas"></div>
       <div class="scroll"><table id="tRingkas"></table></div>
     </section>
     <section class="panel">
@@ -154,6 +166,67 @@ function warnaStatus(s) {
   return s === "DUPLIKAT" ? "var(--bad)" : s === "HAMPIR DUPLIKAT" ? "var(--warn)" : "var(--ok)";
 }
 
+// ---------- Diagram lingkaran ringkasan ----------
+const URUTAN_STATUS = ["DUPLIKAT", "HAMPIR DUPLIKAT", "TIDAK DUPLIKAT"];
+
+function titikLingkar(cx, cy, r, u) {
+  const a = (u - 0.25) * 2 * Math.PI;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+
+function potongLingkar(cx, cy, r, tebal, mulai, porsi, warna) {
+  if (porsi <= 0) return "";
+  let akhir = mulai + porsi;
+  if (porsi >= 0.9999) akhir = 0.9999;      // lingkaran penuh: busur tidak boleh berimpit
+  const besar = porsi > 0.5 ? 1 : 0;
+  const [x1, y1] = titikLingkar(cx, cy, r, mulai);
+  const [x2, y2] = titikLingkar(cx, cy, r, akhir);
+  const [x3, y3] = titikLingkar(cx, cy, r - tebal, akhir);
+  const [x4, y4] = titikLingkar(cx, cy, r - tebal, mulai);
+  const f = (n) => n.toFixed(2);
+  return `<path d="M ${f(x1)} ${f(y1)} A ${f(r)} ${f(r)} 0 ${besar} 1 ${f(x2)} ${f(y2)} ` +
+         `L ${f(x3)} ${f(y3)} A ${f(r - tebal)} ${f(r - tebal)} 0 ${besar} 0 ${f(x4)} ${f(y4)} Z" ` +
+         `style="fill:${warna}"></path>`;
+}
+
+function diagramLingkaran(hasil) {
+  const hitung = { "DUPLIKAT": 0, "HAMPIR DUPLIKAT": 0, "TIDAK DUPLIKAT": 0 };
+  let total = 0;
+  hasil.forEach(r => {
+    if (r.error) return;
+    hitung[r.status] = (hitung[r.status] || 0) + 1;
+    total++;
+  });
+  if (!total) return "";
+
+  const ada = URUTAN_STATUS.filter(s => hitung[s] > 0);
+  let isi;
+  if (ada.length === 1) {
+    isi = `<circle cx="90" cy="90" r="70" fill="none" stroke="${warnaStatus(ada[0])}" ` +
+          `stroke-width="34"></circle>`;
+  } else {
+    let mulai = 0;
+    isi = URUTAN_STATUS.map(s => {
+      if (!hitung[s]) return "";
+      const porsi = hitung[s] / total;
+      const potong = potongLingkar(90, 90, 70, 34, mulai, porsi, warnaStatus(s));
+      mulai += porsi;
+      return potong;
+    }).join("");
+  }
+
+  const legenda = URUTAN_STATUS.map(s =>
+    `<li><span class="kotak" style="background:${warnaStatus(s)}"></span>` +
+    `<span>${s}</span><span class="legenda-angka">${hitung[s]} ` +
+    `(${(100 * hitung[s] / total).toFixed(1)}%)</span></li>`).join("");
+
+  return `<div class="diagram"><svg viewBox="0 0 180 180" role="img" ` +
+    `aria-label="Komposisi status ${total} pasangan dokumen">${isi}` +
+    `<text class="diagram-angka" x="90" y="86">${total}</text>` +
+    `<text class="diagram-label" x="90" y="104">pasangan</text></svg>` +
+    `<ul class="legenda">${legenda}</ul></div>`;
+}
+
 // ---------- Proses perbandingan ----------
 async function bandingkan() {
   $("pesan").textContent = "";
@@ -183,6 +256,7 @@ async function bandingkan() {
   $("hasil").style.display = "block";
 
   // Ringkasan semua pasangan
+  $("dRingkas").innerHTML = diagramLingkaran(h.hasil);
   const tabelRingkas = h.hasil.map(r => r.error
     ? [esc(r.nama_a) + " – " + esc(r.nama_b), `<span class="err">${esc(r.error)}</span>`, "-", "-"]
     : [esc(r.nama_a) + " – " + esc(r.nama_b),

@@ -1,0 +1,51 @@
+/* Gaya khusus untuk komponen HTML yang disisipkan lewat st.markdown.
+   Warna teks dan garis mengikuti tema Streamlit (terang/gelap). */
+
+:root {
+  --ft-ok: #0f6b66;
+  --ft-warn: #a8570c;
+  --ft-bad: #a32b2b;
+  --ft-line: rgba(128, 128, 128, 0.30);
+  --ft-muted: rgba(128, 128, 128, 0.95);
+}
+
+.ft-judul { font-size: 1.9rem; font-weight: 700; margin: 0 0 4px; line-height: 1.25; }
+.ft-sub { color: var(--ft-muted); margin: 0 0 18px; max-width: 70ch; }
+
+.ft-note { color: var(--ft-muted); font-size: .88rem; margin: 6px 0; }
+.ft-h3 { font-size: 1rem; font-weight: 600; margin: 18px 0 6px; }
+
+.ft-scroll { overflow-x: auto; }
+.ft-tabel { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.ft-tabel th, .ft-tabel td {
+  text-align: left; padding: 6px 8px; vertical-align: top;
+  border-bottom: 1px solid var(--ft-line);
+}
+.ft-mono {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: .78rem; word-break: break-all;
+}
+
+/* Diagram lingkaran komposisi status pada ringkasan perbandingan */
+.ft-diagram { display: flex; flex-wrap: wrap; align-items: center; gap: 24px;
+              margin: 4px 0 16px; }
+.ft-diagram svg { width: 180px; height: 180px; flex: none; }
+.ft-diagram-angka { fill: currentColor; font-size: 30px; font-weight: 700;
+                    text-anchor: middle; }
+.ft-diagram-label { fill: var(--ft-muted); font-size: 12px; text-anchor: middle; }
+.ft-legenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px;
+              font-size: .9rem; }
+.ft-legenda li { display: flex; align-items: center; gap: 8px; }
+.ft-kotak { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.ft-legenda-teks { min-width: 12ch; }
+.ft-legenda-angka { color: var(--ft-muted); }
+
+/* Lencana status: latar solid + teks putih agar terbaca di tema terang maupun gelap */
+.ft-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  color: #fff; font-weight: 700; font-size: .82rem; white-space: nowrap;
+}
+.ft-duplikat { background: var(--ft-bad); }
+.ft-hampir   { background: var(--ft-warn); }
+.ft-tidak    { background: var(--ft-ok); }
+.ft-err { color: #e5484d; font-weight: 600; }
