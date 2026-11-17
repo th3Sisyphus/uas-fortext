@@ -160,6 +160,12 @@ async function bandingkan() {
   const dokumen = [...$("daftarDok").children].map(k => ({
     nama: k.dataset.nama, teks: k.querySelector("textarea").value
   }));
+  const kosong = dokumen.filter(d => !d.teks.trim()).map(d => d.nama);
+  if (kosong.length) {
+    $("pesan").textContent = "Dokumen kosong: " + kosong.join(", ") +
+      ". Isi teksnya atau hapus dokumen tersebut.";
+    return;
+  }
   const body = { dokumen, b: +$("b").value, ambang: +$("ambang").value, ambang_min: +$("ambangMin").value };
 
   let h;

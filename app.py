@@ -227,6 +227,11 @@ def bandingkan_banyak(dokumen, b=64, ambang=10, ambang_min=3):
     """
     if len(dokumen) < 2:
         return {"error": "Minimal harus ada 2 dokumen."}
+    # Pastikan tiap dokumen punya isi; sebutkan nama dokumen yang kosong
+    kosong = [d["nama"] for d in dokumen if not proses_dokumen(d["teks"], b)]
+    if kosong:
+        return {"error": "Dokumen kosong: " + ", ".join(kosong) +
+                ". Isi teksnya atau hapus dokumen tersebut."}
     hasil = []
     for i in range(len(dokumen)):
         for j in range(i + 1, len(dokumen)):
