@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deteksi Duplikat dengan SimHash</title>
+<style>
+  :root {
+    --bg: #f1f4f6; --panel: #ffffff; --ink: #14232e; --muted: #5b6b77;
+    --line: #d5dde3; --accent: #0f6b66; --accent-ink: #ffffff;
+    --ok: #0f6b66; --warn: #a8570c; --bad: #a32b2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1a21; --panel: #172630; --ink: #e6eef3; --muted: #94a5b1;
+            --line: #2b3f4c; --accent: #4fc3bb; --accent-ink: #08201e;
+            --ok: #4fc3bb; --warn: #f0a458; --bad: #f08080; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 18px 60px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 10px; }
+  p.sub { color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .grid .panel { margin-bottom: 0; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .head h2 { margin: 0; overflow-wrap: anywhere; }
+  textarea { width: 100%; min-height: 170px; resize: vertical; padding: 10px;
+             border: 1px solid var(--line); border-radius: 6px;
+             background: var(--bg); color: var(--ink); font: inherit; margin-top: 8px; }
+  input[type=number], input[type=file] {
+    font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 100%; }
+  label { font-size: .92rem; color: var(--muted); }
+  .params { display: flex; flex-wrap: wrap; gap: 18px; align-items: end; }
+  .params div { display: flex; flex-direction: column; gap: 4px; }
+  button { font: inherit; font-weight: 600; background: var(--accent);
+           color: var(--accent-ink); border: 0; border-radius: 6px;
+           padding: 10px 22px; cursor: pointer; }
+  button.sekunder { background: transparent; color: var(--accent);
+                    border: 1px solid var(--accent); }
+  button.kecil { padding: 4px 12px; font-size: .88rem; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible,
+  summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  #hasil { display: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  .mono { font-family: Consolas, "Courier New", monospace; font-size: .78rem;
+          word-break: break-all; }
+  .err { color: var(--bad); font-weight: 600; }
+  .note { color: var(--muted); font-size: .88rem; margin: 6px 0; }
+  .status { font-weight: 700; }
+  details { border-top: 1px solid var(--line); padding: 10px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  details h3 { font-size: 1rem; margin: 16px 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Deteksi Duplikat dan Hampir Duplikat</h1>
+  <p class="sub">Bandingkan dokumen dengan SimHash. Unggah berkas .txt, atau tempel teks langsung.</p>
+
+  <div class="grid" id="daftarDok"></div>
+
+  <div class="panel">
+    <button class="sekunder" id="tambah">Tambah dokumen</button>
+    <p class="note">Semua dokumen dibandingkan berpasangan (A–B, A–C, B–C, dan seterusnya).</p>
+  </div>
+
+  <section class="panel">
+    <div class="params">
+      <div><label for="b">Jumlah bit (b)</label>
+        <input type="number" id="b" value="64" min="8" max="128"></div>
+      <div><label for="ambang">Ambang jarak Hamming</label>
+        <input type="number" id="ambang" value="10" min="1" max="64"></div>
+      <div><label for="ambangMin">Ambang "sangat minimal"</label>
+        <input type="number" id="ambangMin" value="3" min="0" max="64"></div>
+      <button id="tombol">Bandingkan dokumen</button>
+    </div>
+    <p id="pesan" class="err"></p>
+  </section>
+
+  <div id="hasil">
+    <section class="panel">
+      <h2>Ringkasan perbandingan</h2>
+      <div class="scroll"><table id="tRingkas"></table></div>
+    </section>
+    <section class="panel">
+      <h2>Rincian tiap pasangan</h2>
+      <div id="rincian"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let counter = 0;
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+// ---------- Kartu dokumen ----------
+function tambahDokumen() {
+  counter++;
+  const kartu = document.createElement("section");
+  kartu.className = "panel";
+  kartu.dataset.nama = "Dokumen " + counter;
+  kartu.innerHTML =
+    `<div class="head"><h2>${esc(kartu.dataset.nama)}</h2>
+       <button class="sekunder kecil hapus">Hapus</button></div>
+     <input type="file" accept=".txt" aria-label="Unggah ${esc(kartu.dataset.nama)}" style="margin-top:8px">
+     <textarea aria-label="Teks ${esc(kartu.dataset.nama)}"></textarea>`;
+
+  kartu.querySelector("input[type=file]").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      kartu.querySelector("textarea").value = reader.result;
+      kartu.dataset.nama = f.name;
+      kartu.querySelector("h2").textContent = f.name;
+    };
+    reader.readAsText(f, "utf-8");
+  });
+
+  kartu.querySelector(".hapus").addEventListener("click", () => {
+    if ($("daftarDok").children.length <= 2) {
+      $("pesan").textContent = "Minimal harus ada 2 dokumen.";
+      return;
+    }
+    $("pesan").textContent = "";
+    kartu.remove();
+  });
+
+  $("daftarDok").appendChild(kartu);
+}
+
+// ---------- Tabel ----------
+function tabel(kepala, baris) {
+  if (!baris.length) return "<p class='note'>Tidak ada data.</p>";
+  return "<div class='scroll'><table><tr>" + kepala.map(k => `<th>${k}</th>`).join("") + "</tr>" +
+    baris.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") +
+    "</table></div>";
+}
+
+function warnaStatus(s) {
+  return s === "DUPLIKAT" ? "var(--bad)" : s === "HAMPIR DUPLIKAT" ? "var(--warn)" : "var(--ok)";
+}
+
+// ---------- Proses perbandingan ----------
+async function bandingkan() {
+  $("pesan").textContent = "";
+  const dokumen = [...$("daftarDok").children].map(k => ({
+    nama: k.dataset.nama, teks: k.querySelector("textarea").value
+  }));
+  const body = { dokumen, b: +$("b").value, ambang: +$("ambang").value, ambang_min: +$("ambangMin").value };
+
+  let h;
+  try {
+    const res = await fetch("/bandingkan", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+    });
+    h = await res.json();
+  } catch (e) {
+    $("pesan").textContent = "Tidak bisa terhubung ke server. Jalankan: python app.py";
+    return;
+  }
+  if (h.error) { $("pesan").textContent = h.error; return; }
+
+  $("hasil").style.display = "block";
+
+  // Ringkasan semua pasangan
+  const tabelRingkas = h.hasil.map(r => r.error
+    ? [esc(r.nama_a) + " – " + esc(r.nama_b), `<span class="err">${esc(r.error)}</span>`, "-", "-"]
+    : [esc(r.nama_a) + " – " + esc(r.nama_b),
+       `<span class="status" style="color:${warnaStatus(r.status)}">${r.status}</span>`,
+       r.persen_mirip + "%", r.persen_minimal + "%"]);
+  $("tRingkas").outerHTML = "<table id='tRingkas'><tr><th>Pasangan dokumen</th><th>Status</th>" +
+    "<th>Kalimat mirip (jarak &lt; ambang)</th><th>Kemiripan sangat minimal</th></tr>" +
+    tabelRingkas.map(r => "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") + "</table>";
+
+  // Rincian tiap pasangan
+  let out = "";
+  for (const r of h.hasil) {
+    if (r.error) continue;
+    const tA = Object.fromEntries(r.kalimat_a.map(k => [k.id, k.teks]));
+    const tB = Object.fromEntries(r.kalimat_b.map(k => [k.id, k.teks]));
+    const fp = [];
+    r.kalimat_a.forEach(k => fp.push(["A", k.id, esc(k.teks), k.desimal, `<span class="mono">${k.biner}</span>`]));
+    r.kalimat_b.forEach(k => fp.push(["B", k.id, esc(k.teks), k.desimal, `<span class="mono">${k.biner}</span>`]));
+
+    out += `<details><summary>${esc(r.nama_a)} – ${esc(r.nama_b)}
+        (<span style="color:${warnaStatus(r.status)}">${r.status}</span>)</summary>
+      <h3>Pasangan kalimat mirip (A = ${esc(r.nama_a)}, B = ${esc(r.nama_b)})</h3>
+      ${tabel(["Jarak", "Kalimat A", "Kalimat B"],
+          r.pasangan_mirip.map(p => [p.jarak, `#${p.id_a} ${esc(tA[p.id_a])}`, `#${p.id_b} ${esc(tB[p.id_b])}`]))}
+      <h3>Kandidat setelah geser kanan dan pengurutan</h3>
+      <p class="note">Fingerprint digeser ke kanan 0, 2, dan 4 bit, diurutkan menurut nilai desimal,
+         lalu kalimat yang bertetangga dihitung jarak Hamming-nya.</p>
+      ${tabel(["Geser", "Jarak", "Kalimat A", "Kalimat B"],
+          r.kandidat_urut.map(p => [p.geser, p.jarak, `#${p.id_a} ${esc(tA[p.id_a])}`, `#${p.id_b} ${esc(tB[p.id_b])}`]))}
+      <h3>Fingerprint tiap kalimat</h3>
+      ${tabel(["Dok", "ID", "Kalimat", "Desimal", "Biner"], fp)}
+    </details>`;
+  }
+  $("rincian").innerHTML = out;
+}
+
+$("tambah").addEventListener("click", tambahDokumen);
+$("tombol").addEventListener("click", bandingkan);
+tambahDokumen(); tambahDokumen();
+</script>
+</body>
+</html>
