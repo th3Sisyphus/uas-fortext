@@ -45,10 +45,11 @@ class TesUI(unittest.TestCase):
     def test_muat_contoh_lalu_bandingkan(self):
         at = app()
         tombol(at, "Muat contoh").click().run()
-        self.assertEqual(len(at.text_area), 3)
+        jumlah = len(list((ROOT / "contoh").glob("*.txt")))
+        self.assertEqual(len(at.text_area), jumlah)
         tombol(at, "Bandingkan dokumen").click().run()
         self.assertFalse(at.exception)
-        self.assertEqual(len(at.expander), 3)
+        self.assertEqual(len(at.expander), jumlah * (jumlah - 1) // 2)
         isi = " ".join(m.value for m in at.markdown)
         self.assertIn("HAMPIR DUPLIKAT", isi)
         self.assertIn("TIDAK DUPLIKAT", isi)

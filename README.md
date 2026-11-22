@@ -25,7 +25,7 @@ uas-fortext/
 │   ├── components.py    #   pembuat HTML tabel dan lencana
 │   ├── state.py         #   pengelolaan daftar dokumen di session_state
 │   └── styles.css       #   CSS khusus, mengikuti tema terang/gelap Streamlit
-├── contoh/              # contoh1.txt, contoh2.txt, contoh3.txt
+├── contoh/              # contoh1.txt s.d. contoh10.txt
 ├── tests/               # tes logika inti dan tes UI
 └── BACA.txt
 ```
